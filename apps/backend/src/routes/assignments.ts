@@ -1,106 +1,33 @@
-﻿import { Router, type Router as ExpressRouter } from 'express';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { Assignment } from '../models/Assignment';
-import { createAssignmentSchema, listQuerySchema } from '../validators/assignment';
-import { HttpError } from '../middleware/error';
-import { getQueue, type GenerationJobData } from '../queue/generationQueue';
-import { emitJobQueued } from '../ws/socket';
-import { config } from '../config';
+﻿@"
+import { z } from 'zod';
 
-export const assignmentsRouter: ExpressRouter = Router();
-
-assignmentsRouter.post('/', async (req, res, next) => {
-  try {
-    const parsed = createAssignmentSchema.parse(req.body);
-    const doc = await Assignment.create({
-      ...parsed,
-      dueDate: new Date(parsed.dueDate),
-      status: 'queued',
-    });
-    const job = await getQueue().add(
-      'generate',
-      { assignmentId: doc.id, attempt: 0 } satisfies GenerationJobData,
-      { jobId: 'assignment-' + doc.id },
-    );
-    doc.jobId = job.id ?? '';
-    await doc.save();
-    emitJobQueued({ jobId: job.id ?? '', assignmentId: doc.id });
-    res.status(201).json({ assignmentId: doc.id, jobId: job.id });
-  } catch (err) {
-    next(err);
-  }
+const questionTypeSpec = z.object({
+  type: z.enum(['MCQ', 'Short', 'Long']),
+  count: z.number().int().positive(),
+  marksEach: z.number().int().positive(),
 });
 
-assignmentsRouter.get('/', async (req, res, next) => {
-  try {
-    const { page, pageSize } = listQuerySchema.parse(req.query);
-    const skip = (page - 1) * pageSize;
-    const [items, total] = await Promise.all([
-      Assignment.find({}).sort({ createdAt: -1 }).skip(skip).limit(pageSize).select('-rawLlmOutput').lean(),
-      Assignment.countDocuments({}),
-    ]);
-    res.json({ items, total, page, pageSize });
-  } catch (err) {
-    next(err);
-  }
-});
+export const createAssignmentSchema = z
+  .object({
+    title: z.string().trim().min(1, 'title is required').max(200),
+    subject: z.string().trim().max(120).optional(),
+    className: z.string().trim().max(60).optional(),
+    school: z.string().trim().max(160).optional(),
+    timeAllowed: z.string().trim().max(60).optional(),
+    dueDate: z
+      .string()
+      .datetime({ offset: true })
+      .refine((s) => new Date(s).getTime() > Date.now(), 'dueDate must be in the future'),
+    questionTypes: z.array(questionTypeSpec).min(1, 'at least one question type required'),
+    additionalInstructions: z.string().max(2000).optional(),
+    sourceFileText: z.string().max(50_000).optional(),
+  })
+  .strict();
 
-assignmentsRouter.get('/:id', async (req, res, next) => {
-  try {
-    const doc = await Assignment.findById(req.params.id).select('-rawLlmOutput').lean();
-    if (!doc) throw new HttpError(404, 'Assignment not found');
-    res.json(doc);
-  } catch (err) {
-    next(err);
-  }
-});
+export type CreateAssignmentInput = z.infer<typeof createAssignmentSchema>;
 
-assignmentsRouter.post('/:id/regenerate', async (req, res, next) => {
-  try {
-    const doc = await Assignment.findById(req.params.id);
-    if (!doc) throw new HttpError(404, 'Assignment not found');
-    doc.status = 'queued';
-    doc.errorMessage = undefined;
-    doc.generatedPaper = undefined;
-    doc.pdfPath = undefined;
-    doc.attempts = 0;
-    await doc.save();
-    const job = await getQueue().add(
-      'generate',
-      { assignmentId: doc.id, attempt: 0 } satisfies GenerationJobData,
-      { jobId: 'assignment-' + doc.id + '-' + Date.now() },
-    );
-    doc.jobId = job.id ?? '';
-    await doc.save();
-    emitJobQueued({ jobId: job.id ?? '', assignmentId: doc.id });
-    res.status(202).json({ assignmentId: doc.id, jobId: job.id });
-  } catch (err) {
-    next(err);
-  }
+export const listQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
-
-assignmentsRouter.get('/:id/pdf', async (req, res, next) => {
-  try {
-    const doc = await Assignment.findById(req.params.id).select('pdfPath title').lean();
-    if (!doc) throw new HttpError(404, 'Assignment not found');
-    if (!doc.pdfPath) throw new HttpError(404, 'PDF not generated yet');
-    const absPath = path.isAbsolute(doc.pdfPath)
-      ? doc.pdfPath
-      : path.resolve(config.pdfStorageDir, path.basename(doc.pdfPath));
-    try {
-      await fs.access(absPath);
-    } catch {
-      throw new HttpError(404, 'PDF file missing from storage');
-    }
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename="' + sanitizeFilename(doc.title ?? 'paper') + '.pdf"');
-    res.sendFile(absPath);
-  } catch (err) {
-    next(err);
-  }
-});
-
-function sanitizeFilename(s: string): string {
-  return s.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 80) || 'paper';
-}
+"@ | Set-Content -Path "apps/backend/src/validators/assignment.ts" -Encoding UTF8
