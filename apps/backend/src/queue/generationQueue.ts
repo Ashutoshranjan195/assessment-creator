@@ -1,5 +1,10 @@
-import { Queue, QueueEvents } from 'bullmq';
+﻿import { Queue, QueueEvents } from 'bullmq';
 import { redisConnection } from '../config/redis';
+
+export interface GenerationJobData {
+  assignmentId: string;
+  attempt: number;
+}
 
 const queue = new Queue('question-generation', { connection: redisConnection });
 const queueEvents = new QueueEvents('question-generation', { connection: redisConnection });
