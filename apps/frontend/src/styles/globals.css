@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 font-sans antialiased;
+}
+
+@layer components {
+  .input {
+    @apply w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-veda-500;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center px-3 py-2 rounded-md font-medium transition-colors duration-150;
+  }
+
+  .fade-in {
+    animation: fadeIn 240ms ease-out both;
+  }
+
+  .sr-only {
+    position: absolute !important;
+    height: 1px; width: 1px; overflow: hidden;
+    clip: rect(1px, 1px, 1px, 1px); white-space: nowrap;
+    border: 0; padding: 0; margin: -1px;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Improve keyboard focus visibility */
+:where(:focus-visible) {
+  outline: 3px solid rgba(59,130,246,0.45); /* semi-opaque blue */
+  outline-offset: 2px;
+}
+
+/* Prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in { animation: none !important; }
+  * { transition: none !important; }
+}
+
+/* ---------- Print CSS for the question-paper output ----------- */
+@media print {
+  @page {
+    size: A4;
+    margin: 18mm 16mm;
+  }
+
+  body {
+    @apply bg-white text-black;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .paper {
+    @apply shadow-none border-none;
+  }
+
+  .section-break {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

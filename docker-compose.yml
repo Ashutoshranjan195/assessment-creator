@@ -1,0 +1,93 @@
+version: '3.9'
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - '27018:27017'
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6380:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      BACKEND_PORT: 4000
+      MONGODB_URI: mongodb://mongo:27017/vedaai
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: http://localhost:3001
+      PDF_STORAGE_DIR: /storage/pdfs
+      LOG_LEVEL: info
+    ports:
+      - '4000:4000'
+    volumes:
+      - pdf-storage:/storage/pdfs
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/vedaai
+      REDIS_URL: redis://redis:6379
+      FRONTEND_URL: http://frontend:3000
+      PDF_STORAGE_DIR: /storage/pdfs
+      # TODO: USER MUST PROVIDE — set LLM_PROVIDER and LLM_API_KEY in .env to
+      # switch from the deterministic mock to a real LLM.
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+    volumes:
+      - pdf-storage:/storage/pdfs
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_BACKEND_URL: http://localhost:4000
+        NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+    depends_on:
+      - backend
+    environment:
+      # URL exposed to the browser (use host mapping)
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:4000
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+      # Internal URL for server-side Next (resolves to the backend container)
+      BACKEND_INTERNAL_URL: http://backend:4000
+    ports:
+      - '3001:3000'
+
+volumes:
+  mongo-data:
+  pdf-storage:

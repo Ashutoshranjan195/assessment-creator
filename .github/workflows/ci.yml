@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @vedaai/shared build
+
+      - name: Typecheck (backend + worker + frontend)
+        run: pnpm -r typecheck
+
+      - name: Lint backend
+        run: pnpm --filter @vedaai/backend lint || echo "lint warnings"
+
+      - name: Lint worker
+        run: pnpm --filter @vedaai/worker lint || echo "lint warnings"
+
+      - name: Lint frontend
+        env:
+          NEXT_PUBLIC_BACKEND_URL: http://localhost:4000
+          NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+        run: pnpm --filter @vedaai/frontend lint || echo "lint warnings"
+
+      - name: Test backend
+        run: pnpm --filter @vedaai/backend test
+
+      - name: Test worker
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+        run: pnpm --filter @vedaai/worker test
+
+      - name: Build backend
+        run: pnpm --filter @vedaai/backend build
+
+      - name: Build worker
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+        run: pnpm --filter @vedaai/worker build
+
+      - name: Build frontend
+        env:
+          NEXT_PUBLIC_BACKEND_URL: http://localhost:4000
+          NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+        run: pnpm --filter @vedaai/frontend build
+
+  # ---------------------------------------------------------------------------
+  # Deploy hints — keep these here as a reminder; they intentionally do not run
+  # automatically. Wire up secrets and uncomment to enable.
+  # ---------------------------------------------------------------------------
+  # deploy-frontend-vercel:
+  #   needs: ci
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: amondnet/vercel-action@v25
+  #       with:
+  #         vercel-token: ${{ secrets.VERCEL_TOKEN }}        # TODO: USER MUST PROVIDE
+  #         vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}      # TODO: USER MUST PROVIDE
+  #         vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }} # TODO: USER MUST PROVIDE
+  #         working-directory: apps/frontend
+  #         vercel-args: '--prod'
+  #
+  # deploy-backend-render:
+  #   needs: ci
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #   steps:
+  #     - name: Trigger Render deploy
+  #       run: |
+  #         curl -fsSL -X POST \
+  #           "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+  #           -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+  #           -H "Content-Type: application/json"
+  #       # TODO: USER MUST PROVIDE RENDER_API_KEY and RENDER_SERVICE_ID

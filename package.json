@@ -1,0 +1,26 @@
+{
+  "name": "vedaai-assessment-creator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VedaAI - AI Assessment Creator monorepo (Next.js + Express + BullMQ + Puppeteer)",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\""
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.10",
+    "prettier": "^3.3.3",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=18.18.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.15.1"
+}
