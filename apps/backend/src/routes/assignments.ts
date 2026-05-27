@@ -21,7 +21,7 @@ assignmentsRouter.post('/', async (req, res, next) => {
     const job = await getQueue().add(
       'generate',
       { assignmentId: doc.id, attempt: 0 } satisfies GenerationJobData,
-      { jobId: ssignment- },
+      { jobId: 'assignment-' + doc.id },
     );
     doc.jobId = job.id ?? '';
     await doc.save();
@@ -69,7 +69,7 @@ assignmentsRouter.post('/:id/regenerate', async (req, res, next) => {
     const job = await getQueue().add(
       'generate',
       { assignmentId: doc.id, attempt: 0 } satisfies GenerationJobData,
-      { jobId: ssignment-- },
+      { jobId: 'assignment-' + doc.id + '-' + Date.now() },
     );
     doc.jobId = job.id ?? '';
     await doc.save();
@@ -94,7 +94,7 @@ assignmentsRouter.get('/:id/pdf', async (req, res, next) => {
       throw new HttpError(404, 'PDF file missing from storage');
     }
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', inline; filename=".pdf");
+    res.setHeader('Content-Disposition', 'inline; filename="' + sanitizeFilename(doc.title ?? 'paper') + '.pdf"');
     res.sendFile(absPath);
   } catch (err) {
     next(err);
